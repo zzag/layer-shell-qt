@@ -25,10 +25,9 @@ public:
 
     bool initialize(QtWaylandClient::QWaylandDisplay *display) override;
     QtWaylandClient::QWaylandShellSurface *createShellSurface(QtWaylandClient::QWaylandWindow *window) override;
+    QtWaylandClient::QWaylandShellData *createShellData(QtWaylandClient::QWaylandWindow *window) override;
 
 private:
-    static void registryLayer(void *data, struct wl_registry *registry, uint32_t id, const QString &interface, uint32_t version);
-
     QScopedPointer<QWaylandLayerShell> m_layerShell;
 };
 

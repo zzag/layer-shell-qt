@@ -14,9 +14,10 @@
 
 #include "layershellqt_export.h"
 
+class QWaylandLayerShellData;
+
 namespace LayerShellQt
 {
-class WindowPrivate;
 
 class LAYERSHELLQT_EXPORT Window : public QObject
 {
@@ -101,8 +102,8 @@ Q_SIGNALS:
     void layerChanged();
 
 private:
-    Window(QWindow *window);
-    QScopedPointer<WindowPrivate> d;
+    Window(QWaylandLayerShellData *shellData);
+    QWaylandLayerShellData *m_shellData;
 };
 
 }

@@ -6,7 +6,9 @@
  */
 
 #include "qwaylandlayershell_p.h"
+#include "qwaylandlayershelldata_p.h"
 #include "qwaylandlayershellintegration_p.h"
+#include "qwaylandlayersurface_p.h"
 
 #include <QtWaylandClient/private/qwaylanddisplay_p.h>
 #include <QtWaylandClient/private/qwaylandwindow_p.h>
@@ -15,6 +17,7 @@
 namespace LayerShellQt
 {
 QWaylandLayerShellIntegration::QWaylandLayerShellIntegration()
+    : m_layerShell(new QWaylandLayerShell())
 {
 }
 
@@ -24,24 +27,17 @@ QWaylandLayerShellIntegration::~QWaylandLayerShellIntegration()
 
 bool QWaylandLayerShellIntegration::initialize(QtWaylandClient::QWaylandDisplay *display)
 {
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-    QWaylandShellIntegration::initialize(display);
-#endif
-    display->addRegistryListener(registryLayer, this);
-    return m_layerShell != nullptr;
+    return true;
 }
 
 QtWaylandClient::QWaylandShellSurface *QWaylandLayerShellIntegration::createShellSurface(QtWaylandClient::QWaylandWindow *window)
 {
-    return m_layerShell->createLayerSurface(window);
+    return new QWaylandLayerSurface(m_layerShell.data(), window);
 }
 
-void QWaylandLayerShellIntegration::registryLayer(void *data, struct wl_registry *registry, uint32_t id, const QString &interface, uint32_t version)
+QtWaylandClient::QWaylandShellData *QWaylandLayerShellIntegration::createShellData(QtWaylandClient::QWaylandWindow *window)
 {
-    QWaylandLayerShellIntegration *shell = static_cast<QWaylandLayerShellIntegration *>(data);
-
-    if (interface == zwlr_layer_shell_v1_interface.name)
-        shell->m_layerShell.reset(new QWaylandLayerShell(registry, id, std::min(version, 4u)));
+    return new QWaylandLayerShellData(window);
 }
 
 }

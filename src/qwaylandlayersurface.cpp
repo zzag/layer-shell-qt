@@ -5,10 +5,11 @@
  *   SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "interfaces/shell.h"
-#include "layershellqt_logging.h"
 #include "qwaylandlayershell_p.h"
+#include "qwaylandlayershelldata_p.h"
 #include "qwaylandlayersurface_p.h"
+
+#include "layershellqt_logging.h"
 
 #include <QtWaylandClient/private/qwaylandscreen_p.h>
 #include <QtWaylandClient/private/qwaylandsurface_p.h>
@@ -20,11 +21,11 @@ QWaylandLayerSurface::QWaylandLayerSurface(QWaylandLayerShell *shell, QtWaylandC
     : QtWaylandClient::QWaylandShellSurface(window)
     , QtWayland::zwlr_layer_surface_v1()
 {
-    LayerShellQt::Window *interface = Window::get(window->window());
-    Q_ASSERT(interface);
+    QWaylandLayerShellData *shellData = static_cast<QWaylandLayerShellData *>(window->shellData());
+    Q_ASSERT(shellData);
 
     wl_output *output = nullptr;
-    QScreen *screen = interface->desiredOutput();
+    QScreen *screen = shellData->desiredOutput;
     if (screen) {
         auto waylandScreen = dynamic_cast<QtWaylandClient::QWaylandScreen *>(screen->handle());
         // Qt will always assign a screen to a window, but if the compositor has no screens available a dummy QScreen object is created
@@ -35,32 +36,15 @@ QWaylandLayerSurface::QWaylandLayerSurface(QWaylandLayerShell *shell, QtWaylandC
             output = waylandScreen->output();
         }
     }
-    init(shell->get_layer_surface(window->waylandSurface()->object(), output, interface->layer(), interface->scope()));
-    connect(interface, &Window::layerChanged, this, [this, interface]() {
-        setLayer(interface->layer());
-    });
+    init(shell->get_layer_surface(window->waylandSurface()->object(), output, shellData->layer, shellData->scope));
 
-    set_anchor(interface->anchors());
-    connect(interface, &Window::anchorsChanged, this, [this, interface]() {
-        set_anchor(interface->anchors());
-    });
-    setExclusiveZone(interface->exclusionZone());
-    connect(interface, &Window::exclusionZoneChanged, this, [this, interface]() {
-        setExclusiveZone(interface->exclusionZone());
-    });
-
-    setMargins(interface->margins());
-    connect(interface, &Window::marginsChanged, this, [this, interface]() {
-        setMargins(interface->margins());
-    });
-
-    setKeyboardInteractivity(interface->keyboardInteractivity());
-    connect(interface, &Window::keyboardInteractivityChanged, this, [this, interface]() {
-        setKeyboardInteractivity(interface->keyboardInteractivity());
-    });
+    set_anchor(shellData->anchors);
+    setExclusiveZone(shellData->exclusionZone);
+    setMargins(shellData->margins);
+    setKeyboardInteractivity(shellData->keyboardInteractivity);
 
     QSize size = window->surfaceSize();
-    const Window::Anchors anchors = interface->anchors();
+    const Window::Anchors anchors = shellData->anchors;
     if ((anchors & Window::AnchorLeft) && (anchors & Window::AnchorRight)) {
         size.setWidth(0);
     }
