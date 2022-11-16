@@ -5,10 +5,10 @@
  *   SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "interfaces/shell.h"
-#include "layershellqt_logging.h"
 #include "qwaylandlayershell_p.h"
 #include "qwaylandlayersurface_p.h"
+
+#include "layershellqt_logging.h"
 
 #include <QtWaylandClient/private/qwaylandscreen_p.h>
 #include <QtWaylandClient/private/qwaylandsurface_p.h>
@@ -18,15 +18,25 @@ namespace LayerShellQt
 {
 QWaylandLayerSurface::QWaylandLayerSurface(QWaylandLayerShell *shell, QtWaylandClient::QWaylandWindow *window)
     : QtWaylandClient::QWaylandShellSurface(window)
-    , QtWayland::zwlr_layer_surface_v1()
+    , m_shell(shell)
 {
-    LayerShellQt::Window *interface = Window::get(window->window());
-    Q_ASSERT(interface);
+}
 
+QWaylandLayerSurface::~QWaylandLayerSurface()
+{
+    destroy();
+}
+
+bool QWaylandLayerSurface::isCreated() const
+{
+    return QtWayland::zwlr_layer_surface_v1::isInitialized();
+}
+
+bool QWaylandLayerSurface::create()
+{
     wl_output *output = nullptr;
-    QScreen *screen = interface->desiredOutput();
-    if (screen) {
-        auto waylandScreen = dynamic_cast<QtWaylandClient::QWaylandScreen *>(screen->handle());
+    if (m_desiredOutput) {
+        auto waylandScreen = dynamic_cast<QtWaylandClient::QWaylandScreen *>(m_desiredOutput->handle());
         // Qt will always assign a screen to a window, but if the compositor has no screens available a dummy QScreen object is created
         // this will not cast to a QWaylandScreen
         if (!waylandScreen) {
@@ -35,46 +45,35 @@ QWaylandLayerSurface::QWaylandLayerSurface(QWaylandLayerShell *shell, QtWaylandC
             output = waylandScreen->output();
         }
     }
-    init(shell->get_layer_surface(window->waylandSurface()->object(), output, interface->layer(), interface->scope()));
-    connect(interface, &Window::layerChanged, this, [this, interface]() {
-        setLayer(interface->layer());
-    });
 
-    set_anchor(interface->anchors());
-    connect(interface, &Window::anchorsChanged, this, [this, interface]() {
-        set_anchor(interface->anchors());
-    });
-    setExclusiveZone(interface->exclusionZone());
-    connect(interface, &Window::exclusionZoneChanged, this, [this, interface]() {
-        setExclusiveZone(interface->exclusionZone());
-    });
+    QtWayland::zwlr_layer_surface_v1::init(m_shell->get_layer_surface(window()->wlSurface(), output, m_layer, m_scope));
 
-    setMargins(interface->margins());
-    connect(interface, &Window::marginsChanged, this, [this, interface]() {
-        setMargins(interface->margins());
-    });
+    set_anchor(m_anchors);
+    set_exclusive_zone(m_exclusionZone);
+    set_margin(m_margins.top(), m_margins.right(), m_margins.bottom(), m_margins.left());
+    set_keyboard_interactivity(m_keyboardInteractivity);
 
-    setKeyboardInteractivity(interface->keyboardInteractivity());
-    connect(interface, &Window::keyboardInteractivityChanged, this, [this, interface]() {
-        setKeyboardInteractivity(interface->keyboardInteractivity());
-    });
-
-    QSize size = window->surfaceSize();
-    const Window::Anchors anchors = interface->anchors();
-    if ((anchors & Window::AnchorLeft) && (anchors & Window::AnchorRight)) {
+    QSize size = window()->surfaceSize();
+    if ((m_anchors & anchor_left) && (m_anchors & anchor_right)) {
         size.setWidth(0);
     }
-    if ((anchors & Window::AnchorTop) && (anchors & Window::AnchorBottom)) {
+    if ((m_anchors & anchor_top) && (m_anchors & anchor_bottom)) {
         size.setHeight(0);
     }
     if (size.isValid() && size != QSize(0, 0)) {
         set_size(size.width(), size.height());
     }
+
+    return true;
 }
 
-QWaylandLayerSurface::~QWaylandLayerSurface()
+void QWaylandLayerSurface::destroy()
 {
-    destroy();
+    m_configured = false;
+
+    if (QtWayland::zwlr_layer_surface_v1::object()) {
+        QtWayland::zwlr_layer_surface_v1::destroy();
+    }
 }
 
 void QWaylandLayerSurface::zwlr_layer_surface_v1_closed()
@@ -103,30 +102,56 @@ void QWaylandLayerSurface::applyConfigure()
     window()->resizeFromApplyConfigure(m_pendingSize);
 }
 
+void QWaylandLayerSurface::setScope(const QString &scope)
+{
+    m_scope = scope;
+}
+
+void QWaylandLayerSurface::setDesiredOutput(QScreen *screen)
+{
+    m_desiredOutput = screen;
+}
+
 void QWaylandLayerSurface::setAnchor(uint anchor)
 {
-    set_anchor(anchor);
+    m_anchors = anchor;
+    if (object()) {
+        set_anchor(anchor);
+    }
 }
 
 void QWaylandLayerSurface::setExclusiveZone(int32_t zone)
 {
-    set_exclusive_zone(zone);
+    m_exclusionZone = zone;
+    if (object()) {
+        set_exclusive_zone(zone);
+    }
 }
 
 void QWaylandLayerSurface::setMargins(const QMargins &margins)
 {
-    set_margin(margins.top(), margins.right(), margins.bottom(), margins.left());
+    m_margins = margins;
+    if (object()) {
+        set_margin(margins.top(), margins.right(), margins.bottom(), margins.left());
+    }
 }
 
 void QWaylandLayerSurface::setKeyboardInteractivity(uint32_t interactivity)
 {
-    set_keyboard_interactivity(interactivity);
+    m_keyboardInteractivity = interactivity;
+    if (m_keyboardInteractivity) {
+        set_keyboard_interactivity(interactivity);
+    }
 }
 
 void QWaylandLayerSurface::setLayer(uint32_t layer)
 {
-    if (zwlr_layer_surface_v1_get_version(object()) >= ZWLR_LAYER_SURFACE_V1_SET_LAYER_SINCE_VERSION)
-        set_layer(layer);
+    m_layer = layer;
+    if (object()) {
+        if (zwlr_layer_surface_v1_get_version(object()) >= ZWLR_LAYER_SURFACE_V1_SET_LAYER_SINCE_VERSION) {
+            set_layer(layer);
+        }
+    }
 }
 
 }

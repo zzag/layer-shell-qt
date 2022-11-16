@@ -16,13 +16,18 @@
 
 namespace LayerShellQt
 {
-class WindowPrivate;
+
+class QWaylandLayerSurface;
 
 class LAYERSHELLQT_EXPORT Window : public QObject
 {
     Q_OBJECT
+
 public:
+    explicit Window(QWindow *window);
     ~Window() override;
+
+    bool isValid() const;
 
     enum Anchor {
         AnchorTop = 1, ///< The top edge of the anchor rectangle
@@ -87,22 +92,8 @@ public:
     void setScope(const QString &scope);
     QString scope() const;
 
-    /**
-     * Gets the LayerShell Window for a given Qt Window
-     * Ownership is not transferred
-     */
-    static Window *get(QWindow *window);
-
-Q_SIGNALS:
-    void anchorsChanged();
-    void exclusionZoneChanged();
-    void marginsChanged();
-    void keyboardInteractivityChanged();
-    void layerChanged();
-
 private:
-    Window(QWindow *window);
-    QScopedPointer<WindowPrivate> d;
+    QWaylandLayerSurface *m_layerSurface;
 };
 
 }
